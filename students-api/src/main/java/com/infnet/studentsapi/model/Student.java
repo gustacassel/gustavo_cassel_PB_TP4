@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -22,10 +23,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-/**
- * Este microsservico e o dono unico deste agregado: a library-api guarda
- * apenas o id do estudante em cada emprestimo e consulta os dados aqui.
- */
 @Entity
 @Table(name = "students")
 @Data
@@ -61,6 +58,9 @@ public class Student {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "course_id")
     private Course course;
+
+    @Version
+    private Long version;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

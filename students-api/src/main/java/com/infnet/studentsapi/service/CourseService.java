@@ -3,11 +3,13 @@ package com.infnet.studentsapi.service;
 import com.infnet.studentsapi.dto.CourseRequest;
 import com.infnet.studentsapi.dto.CourseSummary;
 import com.infnet.studentsapi.exception.BusinessException;
+import com.infnet.studentsapi.messaging.StudentEvent;
 import com.infnet.studentsapi.model.AuditAction;
 import com.infnet.studentsapi.model.Course;
 import com.infnet.studentsapi.model.DegreeLevel;
 import com.infnet.studentsapi.repository.CourseRepository;
 import com.infnet.studentsapi.repository.StudentRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,13 +26,16 @@ public class CourseService {
     private final CourseRepository repository;
     private final StudentRepository studentRepository;
     private final AuditService auditService;
+    private final ApplicationEventPublisher events;
 
     public CourseService(CourseRepository repository,
                          StudentRepository studentRepository,
-                         AuditService auditService) {
+                         AuditService auditService,
+                         ApplicationEventPublisher events) {
         this.repository = repository;
         this.studentRepository = studentRepository;
         this.auditService = auditService;
+        this.events = events;
     }
 
     public List<Course> findAll() {
@@ -91,6 +96,7 @@ public class CourseService {
                     throw new BusinessException("Ja existe um curso com o codigo '%s'".formatted(request.code()));
                 });
 
+        var nameChanged = !Objects.equals(course.getName(), request.name());
         var changes = new StringBuilder();
         appendChange(changes, "name", course.getName(), request.name());
         appendChange(changes, "code", course.getCode(), request.code());
@@ -103,6 +109,12 @@ public class CourseService {
         var saved = repository.save(course);
         auditService.record(ENTITY_NAME, saved.getId(), AuditAction.UPDATE,
                 changes.isEmpty() ? "Nenhum campo alterado" : changes.toString());
+
+        // o nome do curso vai no evento do aluno
+        if (nameChanged) {
+            studentRepository.findByCourseId(id)
+                    .forEach(student -> events.publishEvent(StudentEvent.updated(student)));
+        }
         return Optional.of(saved);
     }
 

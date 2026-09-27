@@ -2,12 +2,14 @@ package com.infnet.studentsapi.service;
 
 import com.infnet.studentsapi.dto.StudentRequest;
 import com.infnet.studentsapi.exception.BusinessException;
+import com.infnet.studentsapi.messaging.StudentEvent;
 import com.infnet.studentsapi.model.AuditAction;
 import com.infnet.studentsapi.model.Course;
 import com.infnet.studentsapi.model.Student;
 import com.infnet.studentsapi.model.StudentStatus;
 import com.infnet.studentsapi.repository.CourseRepository;
 import com.infnet.studentsapi.repository.StudentRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,13 +25,16 @@ public class StudentService {
     private final StudentRepository repository;
     private final CourseRepository courseRepository;
     private final AuditService auditService;
+    private final ApplicationEventPublisher events;
 
     public StudentService(StudentRepository repository,
                           CourseRepository courseRepository,
-                          AuditService auditService) {
+                          AuditService auditService,
+                          ApplicationEventPublisher events) {
         this.repository = repository;
         this.courseRepository = courseRepository;
         this.auditService = auditService;
+        this.events = events;
     }
 
     public List<Student> findAll() {
@@ -72,6 +77,7 @@ public class StudentService {
         auditService.record(ENTITY_NAME, saved.getId(), AuditAction.CREATE,
                 "Aluno cadastrado: '%s' (matricula %s, curso %s)"
                         .formatted(saved.getName(), saved.getEnrollmentNumber(), courseLabel(saved.getCourse())));
+        events.publishEvent(StudentEvent.created(saved));
         return saved;
     }
 
@@ -97,9 +103,10 @@ public class StudentService {
 
         apply(student, request);
 
-        var saved = repository.save(student);
+        var saved = repository.saveAndFlush(student);
         auditService.record(ENTITY_NAME, saved.getId(), AuditAction.UPDATE,
                 changes.isEmpty() ? "Nenhum campo alterado" : changes.toString());
+        events.publishEvent(StudentEvent.updated(saved));
         return Optional.of(saved);
     }
 
@@ -113,6 +120,7 @@ public class StudentService {
         repository.delete(found.get());
         auditService.record(ENTITY_NAME, id, AuditAction.DELETE,
                 "Aluno removido: '%s'".formatted(found.get().getName()));
+        events.publishEvent(StudentEvent.deleted(found.get()));
         return true;
     }
 

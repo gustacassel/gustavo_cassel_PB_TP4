@@ -12,7 +12,7 @@
     <artifactId>students-api</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>students-api</name>
-    <description>Microsservico de cadastro de estudantes e cursos (TP3)</description>
+    <description>Microsservico de cadastro de estudantes e cursos (TP4 - orientado a eventos)</description>
     <url/>
     <licenses>
         <license/>
@@ -46,6 +46,10 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -76,6 +80,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
