@@ -73,7 +73,7 @@ export default function CourseList() {
             setError(null)
         } catch (err) {
             setError(
-                `${errorMessage(err, "Não foi possível carregar os cursos.")} — verifique se a students-api está no ar na porta 8081.`,
+                `${errorMessage(err, "Não foi possível carregar os cursos.")} - verifique se a students-api está no ar na porta 8081.`,
             )
         } finally {
             setIsLoading(false)

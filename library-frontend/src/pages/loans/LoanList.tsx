@@ -25,7 +25,7 @@ const bookOptions = (books: Book[], loanedIds: Set<number>) =>
     books
         .map((book) => {
             const loaned = loanedIds.has(book.id)
-            const label = `${book.title} — ${book.author}${loaned ? " · emprestado" : ""}`
+            const label = `${book.title} - ${book.author}${loaned ? " · emprestado" : ""}`
             return `<option value="${book.id}" ${loaned ? "disabled" : ""}>${escapeHtml(label)}</option>`
         })
         .join("")
