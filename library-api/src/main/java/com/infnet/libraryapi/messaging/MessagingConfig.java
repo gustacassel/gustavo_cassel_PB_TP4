@@ -15,10 +15,16 @@ import org.springframework.context.annotation.Configuration;
 public class MessagingConfig {
     public static final String STUDENTS_EXCHANGE = "students.events";
     public static final String STUDENTS_QUEUE = "library.students";
+    public static final String LIBRARY_EXCHANGE = "library.events";
 
     @Bean
     public TopicExchange studentsExchange() {
         return ExchangeBuilder.topicExchange(STUDENTS_EXCHANGE).durable(true).build();
+    }
+
+    @Bean
+    public TopicExchange libraryExchange() {
+        return ExchangeBuilder.topicExchange(LIBRARY_EXCHANGE).durable(true).build();
     }
 
     @Bean

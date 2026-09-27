@@ -16,6 +16,7 @@ import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Formula;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -61,6 +62,9 @@ public class Student {
 
     @Version
     private Long version;
+
+    @Formula("(select count(*) from student_loans l where l.student_id = id and l.status = 'ACTIVE')")
+    private Long activeLoans;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

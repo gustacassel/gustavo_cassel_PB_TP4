@@ -25,15 +25,18 @@ public class StudentService {
     private final StudentRepository repository;
     private final CourseRepository courseRepository;
     private final AuditService auditService;
+    private final StudentLoanService studentLoanService;
     private final ApplicationEventPublisher events;
 
     public StudentService(StudentRepository repository,
                           CourseRepository courseRepository,
                           AuditService auditService,
+                          StudentLoanService studentLoanService,
                           ApplicationEventPublisher events) {
         this.repository = repository;
         this.courseRepository = courseRepository;
         this.auditService = auditService;
+        this.studentLoanService = studentLoanService;
         this.events = events;
     }
 
@@ -115,6 +118,13 @@ public class StudentService {
         var found = repository.findById(id);
         if (found.isEmpty()) {
             return false;
+        }
+
+        var activeLoans = studentLoanService.countActive(id);
+        if (activeLoans > 0) {
+            throw new BusinessException(
+                    "Nao e possivel remover o aluno '%s': ele possui %d emprestimo(s) ativo(s) na biblioteca"
+                            .formatted(found.get().getName(), activeLoans));
         }
 
         repository.delete(found.get());

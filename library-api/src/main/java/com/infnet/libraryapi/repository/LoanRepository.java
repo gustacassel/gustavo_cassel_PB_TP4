@@ -19,6 +19,8 @@ public interface LoanRepository extends JpaRepository<Loan, Long> {
 
     List<Loan> findByBookId(Long bookId);
 
+    boolean existsByBookIdAndStatus(Long bookId, LoanStatus status);
+
     @Query("SELECT l FROM Loan l WHERE l.status = com.infnet.libraryapi.model.LoanStatus.ACTIVE AND l.dueDate < :date")
     List<Loan> findOverdue(@Param("date") LocalDate date);
 }

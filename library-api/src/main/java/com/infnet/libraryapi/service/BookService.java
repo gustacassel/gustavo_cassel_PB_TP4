@@ -1,8 +1,11 @@
 package com.infnet.libraryapi.service;
 
+import com.infnet.libraryapi.exception.BusinessException;
 import com.infnet.libraryapi.model.AuditAction;
 import com.infnet.libraryapi.model.Book;
+import com.infnet.libraryapi.model.LoanStatus;
 import com.infnet.libraryapi.repository.BookRepository;
+import com.infnet.libraryapi.repository.LoanRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,10 +18,12 @@ public class BookService {
     private static final String ENTITY_NAME = "BOOK";
 
     private final BookRepository repository;
+    private final LoanRepository loanRepository;
     private final AuditService auditService;
 
-    public BookService(BookRepository repository, AuditService auditService) {
+    public BookService(BookRepository repository, LoanRepository loanRepository, AuditService auditService) {
         this.repository = repository;
+        this.loanRepository = loanRepository;
         this.auditService = auditService;
     }
 
@@ -77,6 +82,12 @@ public class BookService {
         var book = repository.findById(id);
         if (book.isEmpty()) {
             return false;
+        }
+
+        if (loanRepository.existsByBookIdAndStatus(id, LoanStatus.ACTIVE)) {
+            throw new BusinessException(
+                    "Nao e possivel remover o livro '%s': existem emprestimos ativos dele"
+                            .formatted(book.get().getTitle()));
         }
 
         repository.delete(book.get());

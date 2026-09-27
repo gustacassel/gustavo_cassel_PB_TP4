@@ -3,12 +3,15 @@ package com.infnet.libraryapi.service;
 import com.infnet.libraryapi.dto.LoanRequest;
 import com.infnet.libraryapi.dto.LoanResponse;
 import com.infnet.libraryapi.exception.BusinessException;
+import com.infnet.libraryapi.messaging.LoanEvent;
+import com.infnet.libraryapi.messaging.LoanEventType;
 import com.infnet.libraryapi.model.AuditAction;
 import com.infnet.libraryapi.model.Loan;
 import com.infnet.libraryapi.model.LoanStatus;
 import com.infnet.libraryapi.model.StudentReplica;
 import com.infnet.libraryapi.repository.BookRepository;
 import com.infnet.libraryapi.repository.LoanRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,15 +30,18 @@ public class LoanService {
     private final BookRepository bookRepository;
     private final StudentReplicaService studentReplicaService;
     private final AuditService auditService;
+    private final ApplicationEventPublisher events;
 
     public LoanService(LoanRepository repository,
                        BookRepository bookRepository,
                        StudentReplicaService studentReplicaService,
-                       AuditService auditService) {
+                       AuditService auditService,
+                       ApplicationEventPublisher events) {
         this.repository = repository;
         this.bookRepository = bookRepository;
         this.studentReplicaService = studentReplicaService;
         this.auditService = auditService;
+        this.events = events;
     }
 
     public List<Loan> findAll() {
@@ -108,6 +114,7 @@ public class LoanService {
         auditService.record(ENTITY_NAME, saved.getId(), AuditAction.CREATE,
                 "Emprestimo criado: livro '%s' para aluno '%s' (id %d), devolucao ate %s"
                         .formatted(book.getTitle(), student.getName(), student.getId(), saved.getDueDate()));
+        events.publishEvent(LoanEvent.of(LoanEventType.CREATED, saved));
         return LoanResponse.of(saved, student);
     }
 
@@ -126,6 +133,7 @@ public class LoanService {
         auditService.record(ENTITY_NAME, saved.getId(), AuditAction.UPDATE,
                 "Emprestimo devolvido em %s: livro '%s' (aluno '%s')"
                         .formatted(saved.getReturnDate(), saved.getBook().getTitle(), saved.getStudentName()));
+        events.publishEvent(LoanEvent.of(LoanEventType.RETURNED, saved));
         return Optional.of(saved);
     }
 
@@ -140,6 +148,7 @@ public class LoanService {
         auditService.record(ENTITY_NAME, id, AuditAction.DELETE,
                 "Emprestimo removido: livro '%s' (aluno '%s')"
                         .formatted(loan.get().getBook().getTitle(), loan.get().getStudentName()));
+        events.publishEvent(LoanEvent.of(LoanEventType.DELETED, loan.get()));
         return true;
     }
 }
