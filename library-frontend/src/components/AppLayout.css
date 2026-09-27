@@ -81,8 +81,31 @@
     box-shadow: inset 3px 0 0 var(--aurora-accent);
 }
 
-.sidebar-services {
+.theme-toggle {
     margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.75rem;
+    background: transparent;
+    color: #c9cee0;
+    font-weight: 500;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.theme-toggle:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.theme-toggle i {
+    font-size: 1.05rem;
+    color: var(--aurora-accent);
+}
+
+.sidebar-services {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
@@ -173,6 +196,11 @@
 
     .sidebar-link {
         white-space: nowrap;
+    }
+
+    .theme-toggle {
+        margin-top: 0;
+        align-self: flex-start;
     }
 
     .sidebar-services {

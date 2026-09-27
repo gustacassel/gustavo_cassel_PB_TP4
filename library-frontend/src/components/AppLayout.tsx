@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom"
 import { useServiceStatus, type ServiceState } from "../hooks/useServiceStatus"
+import { useTheme } from "../hooks/useTheme"
 import "./AppLayout.css"
 
 const NAV_ITEMS = [
@@ -32,6 +33,7 @@ function ServiceIndicator({ name, port, state }: { name: string; port: number; s
 
 export default function AppLayout() {
     const status = useServiceStatus()
+    const { theme, toggleTheme } = useTheme()
 
     return (
         <div className="app-shell">
@@ -59,6 +61,11 @@ export default function AppLayout() {
                         </NavLink>
                     ))}
                 </nav>
+
+                <button type="button" className="theme-toggle" onClick={toggleTheme}>
+                    <i className={`bi ${theme === "dark" ? "bi-sun" : "bi-moon-stars"}`} />
+                    <span>{theme === "dark" ? "Tema claro" : "Tema escuro"}</span>
+                </button>
 
                 <div className="sidebar-services">
                     <span className="sidebar-section-title">Serviços</span>

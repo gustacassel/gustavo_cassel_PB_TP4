@@ -67,18 +67,18 @@
 }
 
 .tone-accent {
-    color: #b86e0b;
+    color: var(--aurora-accent-text);
     background: rgba(var(--aurora-accent-rgb), 0.18);
 }
 
 .tone-success {
-    color: #0f8a5f;
+    color: var(--aurora-success-text);
     background: rgba(16, 185, 129, 0.12);
 }
 
 .tone-danger {
-    color: #c2410c;
-    background: rgba(239, 68, 68, 0.1);
+    color: var(--aurora-danger-text);
+    background: rgba(239, 68, 68, 0.12);
 }
 
 .tone-neutral {
@@ -155,7 +155,7 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--aurora-muted);
-    background: #f8f9fc;
+    background: var(--aurora-subtle);
     border-bottom: 1px solid var(--aurora-border);
     padding: 0.75rem 1rem;
     white-space: nowrap;
@@ -172,7 +172,7 @@
 }
 
 .data-table tbody tr:hover td {
-    background: #fafbff;
+    background: var(--aurora-hover);
 }
 
 .cell-main {
@@ -215,7 +215,7 @@
     font-size: 2rem;
     display: block;
     margin-bottom: 0.5rem;
-    color: #c3c8d8;
+    color: var(--aurora-empty-icon);
 }
 
 .filter-pills {
@@ -223,7 +223,7 @@
     gap: 0.25rem;
     padding: 0.25rem;
     border-radius: 0.75rem;
-    background: #f1f2f7;
+    background: var(--aurora-chip);
 }
 
 .filter-pill {
@@ -238,7 +238,7 @@
 
 .filter-pill.active {
     background: var(--aurora-surface);
-    color: var(--aurora-ink);
+    color: var(--aurora-text);
     box-shadow: 0 1px 3px rgba(22, 29, 47, 0.12);
 }
 
@@ -255,7 +255,7 @@
 }
 
 .overdue-text {
-    color: #c2410c;
+    color: var(--aurora-danger-text);
     font-weight: 600;
 }
 
@@ -269,11 +269,11 @@
     border-radius: 999px;
     font-weight: 700;
     font-size: 0.85rem;
-    background: #f1f2f7;
+    background: var(--aurora-chip);
     color: var(--aurora-muted);
 }
 
 .loan-count.has-loans {
     background: rgba(var(--aurora-accent-rgb), 0.2);
-    color: #9a5a06;
+    color: var(--aurora-accent-text);
 }
