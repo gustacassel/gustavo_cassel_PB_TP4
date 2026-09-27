@@ -1,0 +1,91 @@
+.list-page {
+    min-height: 100svh;
+    --accent-rgb: 24, 116, 105;
+    --accent-color: rgb(var(--accent-rgb));
+}
+
+.list-page h1 {
+    font-weight: 600;
+}
+
+.list-page .table th {
+    color: var(--bs-secondary-color);
+    font-weight: 600;
+}
+
+.list-hero {
+    padding: 2rem;
+    border-radius: 1.75rem;
+    background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0));
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.list-hero .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent-color);
+    margin-bottom: 0.75rem;
+}
+
+.metric-card {
+    background: rgba(var(--accent-rgb), 0.1);
+    border-radius: 1rem;
+}
+
+.list-card {
+    border-radius: 1.5rem;
+}
+
+.list-table {
+    border-collapse: separate;
+    border-spacing: 0 0.35rem;
+}
+
+.list-table thead th {
+    border: none;
+    background: rgba(var(--accent-rgb), 0.08);
+    color: var(--bs-secondary-color);
+}
+
+.list-table tbody tr {
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+    border-radius: 0.75rem;
+    background: #fff;
+}
+
+.list-table tbody td:first-child,
+.list-table thead th:first-child {
+    border-top-left-radius: 0.75rem;
+    border-bottom-left-radius: 0.75rem;
+}
+
+.list-table tbody td:last-child,
+.list-table thead th:last-child {
+    border-top-right-radius: 0.75rem;
+    border-bottom-right-radius: 0.75rem;
+}
+
+.list-page .btn-primary {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.list-page .btn-primary:hover,
+.list-page .btn-primary:focus {
+    background-color: rgba(var(--accent-rgb), 0.9);
+    border-color: rgba(var(--accent-rgb), 0.9);
+}
+
+.list-page .btn-outline-primary {
+    color: var(--accent-color);
+    border-color: rgba(var(--accent-rgb), 0.5);
+}
+
+.list-page .btn-outline-primary:hover,
+.list-page .btn-outline-primary:focus {
+    background-color: rgba(var(--accent-rgb), 0.12);
+    color: var(--accent-color);
+    border-color: rgba(var(--accent-rgb), 0.6);
+}

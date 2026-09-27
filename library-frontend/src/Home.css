@@ -1,0 +1,124 @@
+.home-page {
+    min-height: 100svh;
+    --accent-rgb: 24, 116, 105;
+    --accent-color: rgb(var(--accent-rgb));
+}
+
+.hero-section {
+    background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.12), rgba(var(--accent-rgb), 0));
+}
+
+.hero-card {
+    border-radius: 1.5rem;
+}
+
+.eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent-color);
+    margin-bottom: 1rem;
+}
+
+.stats-card {
+    background: rgba(var(--accent-rgb), 0.1);
+    border-radius: 1rem;
+}
+
+.workflow-card {
+    border-radius: 1.25rem;
+    background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.1), rgba(var(--accent-rgb), 0));
+}
+
+.icon-wrapper {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(var(--accent-rgb), 0.14);
+    color: var(--accent-color);
+    font-size: 1.3rem;
+}
+
+.feature-icon {
+    font-size: 1.8rem;
+    color: var(--accent-color);
+}
+
+.step-pill {
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    background: rgba(var(--accent-rgb), 0.14);
+    color: var(--accent-color);
+}
+
+.shortcut-card {
+    border-radius: 1.25rem;
+}
+
+.shortcut-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(var(--accent-rgb), 0.14);
+    color: var(--accent-color);
+    font-size: 1.8rem;
+}
+
+.home-page .btn-primary {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.home-page .btn-primary:hover,
+.home-page .btn-primary:focus {
+    background-color: rgba(var(--accent-rgb), 0.9);
+    border-color: rgba(var(--accent-rgb), 0.9);
+}
+
+.home-page .btn-outline-primary {
+    color: var(--accent-color);
+    border-color: rgba(var(--accent-rgb), 0.5);
+}
+
+.home-page .btn-outline-primary:hover,
+.home-page .btn-outline-primary:focus {
+    background-color: rgba(var(--accent-rgb), 0.12);
+    color: var(--accent-color);
+    border-color: rgba(var(--accent-rgb), 0.6);
+}
+
+.nav-shortcut {
+    text-decoration: none;
+    color: var(--accent-color);
+    font-weight: 600;
+    padding: 0.4rem 0.95rem;
+    border-radius: 999px;
+    background: rgba(var(--accent-rgb), 0.12);
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.nav-shortcut:hover {
+    color: var(--accent-color);
+    background: rgba(var(--accent-rgb), 0.2);
+}
+
+.footer-links a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.footer-links a:hover {
+    text-decoration: underline;
+}

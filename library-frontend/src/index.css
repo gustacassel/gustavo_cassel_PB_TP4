@@ -1,0 +1,31 @@
+:root {
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+    min-height: 100svh;
+}
+
+body {
+    margin: 0;
+    font-family: var(--bs-body-font-family);
+    color: var(--bs-body-color);
+    background-color: var(--bs-body-bg);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-weight: 500;
+    color: var(--bs-heading-color);
+}
+
+p {
+    margin: 0;
+}
