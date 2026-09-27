@@ -1,12 +1,12 @@
 package com.infnet.libraryapi.service;
 
-import com.infnet.libraryapi.client.dto.StudentDto;
 import com.infnet.libraryapi.dto.LoanRequest;
 import com.infnet.libraryapi.dto.LoanResponse;
 import com.infnet.libraryapi.exception.BusinessException;
 import com.infnet.libraryapi.model.AuditAction;
 import com.infnet.libraryapi.model.Loan;
 import com.infnet.libraryapi.model.LoanStatus;
+import com.infnet.libraryapi.model.StudentReplica;
 import com.infnet.libraryapi.repository.BookRepository;
 import com.infnet.libraryapi.repository.LoanRepository;
 import org.springframework.stereotype.Service;
@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class LoanService {
@@ -24,16 +25,16 @@ public class LoanService {
 
     private final LoanRepository repository;
     private final BookRepository bookRepository;
-    private final StudentGateway studentGateway;
+    private final StudentReplicaService studentReplicaService;
     private final AuditService auditService;
 
     public LoanService(LoanRepository repository,
                        BookRepository bookRepository,
-                       StudentGateway studentGateway,
+                       StudentReplicaService studentReplicaService,
                        AuditService auditService) {
         this.repository = repository;
         this.bookRepository = bookRepository;
-        this.studentGateway = studentGateway;
+        this.studentReplicaService = studentReplicaService;
         this.auditService = auditService;
     }
 
@@ -61,48 +62,42 @@ public class LoanService {
         return repository.findOverdue(LocalDate.now());
     }
 
-    /** Uma unica chamada remota enriquece a lista inteira. */
     public List<LoanResponse> enrich(List<Loan> loans) {
         if (loans.isEmpty()) {
             return List.of();
         }
 
-        Map<Long, StudentDto> students = studentGateway.indexAll();
+        var studentIds = loans.stream().map(Loan::getStudentId).collect(Collectors.toSet());
+        Map<Long, StudentReplica> students = studentReplicaService.indexByIds(studentIds);
         return loans.stream()
                 .map(loan -> LoanResponse.of(loan, students.get(loan.getStudentId())))
                 .toList();
     }
 
     public Optional<LoanResponse> enrich(Loan loan) {
-        return Optional.of(LoanResponse.of(loan, studentGateway.tryFindById(loan.getStudentId()).orElse(null)));
+        return Optional.of(LoanResponse.of(loan,
+                studentReplicaService.indexByIds(List.of(loan.getStudentId())).get(loan.getStudentId())));
     }
 
-    /**
-     * Valida o livro localmente e o aluno no microsservico antes de gravar.
-     *
-     * @throws BusinessException se livro/aluno nao existem ou o aluno nao esta ativo
-     * @throws com.infnet.libraryapi.exception.StudentServiceUnavailableException
-     *         se o microsservico nao responder
-     */
     @Transactional
     public LoanResponse create(LoanRequest request) {
         var book = bookRepository.findById(request.bookId())
                 .orElseThrow(() -> new BusinessException("Livro %d nao encontrado".formatted(request.bookId())));
 
-        var student = studentGateway.findRequired(request.studentId())
+        var student = studentReplicaService.findById(request.studentId())
                 .orElseThrow(() -> new BusinessException(
-                        "Estudante %d nao encontrado no microsservico de estudantes".formatted(request.studentId())));
+                        "Estudante %d nao encontrado".formatted(request.studentId())));
 
         if (!student.isActive()) {
             throw new BusinessException(
                     "O estudante '%s' esta com situacao %s e nao pode pegar livros emprestados"
-                            .formatted(student.name(), student.status()));
+                            .formatted(student.getName(), student.getStatus()));
         }
 
         var loan = new Loan();
         loan.setBook(book);
-        loan.setStudentId(student.id());
-        loan.setStudentName(student.name());
+        loan.setStudentId(student.getId());
+        loan.setStudentName(student.getName());
         loan.setLoanDate(request.loanDate() != null ? request.loanDate() : LocalDate.now());
         loan.setDueDate(request.dueDate() != null
                 ? request.dueDate()
@@ -112,7 +107,7 @@ public class LoanService {
         var saved = repository.save(loan);
         auditService.record(ENTITY_NAME, saved.getId(), AuditAction.CREATE,
                 "Emprestimo criado: livro '%s' para aluno '%s' (id %d), devolucao ate %s"
-                        .formatted(book.getTitle(), student.name(), student.id(), saved.getDueDate()));
+                        .formatted(book.getTitle(), student.getName(), student.getId(), saved.getDueDate()));
         return LoanResponse.of(saved, student);
     }
 

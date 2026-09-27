@@ -17,12 +17,6 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body(HttpStatus.CONFLICT, ex.getMessage()));
     }
 
-    @ExceptionHandler(StudentServiceUnavailableException.class)
-    public ResponseEntity<Map<String, Object>> handleUnavailable(StudentServiceUnavailableException ex) {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(body(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage()));
-    }
-
     private Map<String, Object> body(HttpStatus status, String message) {
         var payload = new LinkedHashMap<String, Object>();
         payload.put("status", status.value());

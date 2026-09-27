@@ -39,7 +39,7 @@ public class Loan {
 
     /**
      * O aluno vive no microsservico students-api, entao nao ha chave estrangeira
-     * aqui: a integridade e garantida pelo StudentGateway, nao pelo banco.
+     * aqui: a integridade e garantida pela validacao na copia local (student_replica).
      */
     @Column(name = "student_id", nullable = false)
     private Long studentId;

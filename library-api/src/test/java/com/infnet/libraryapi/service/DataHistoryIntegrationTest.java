@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Teste de integracao do historico de mudancas: toda operacao de escrita
  * feita pela camada de servico deve gerar um registro consultavel de auditoria.
  */
-@SpringBootTest
+@SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=false")
 @Transactional
 class DataHistoryIntegrationTest {
 

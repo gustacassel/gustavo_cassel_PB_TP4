@@ -1,15 +1,14 @@
 package com.infnet.libraryapi.dto;
 
-import com.infnet.libraryapi.client.dto.StudentDto;
 import com.infnet.libraryapi.model.Loan;
 import com.infnet.libraryapi.model.LoanStatus;
+import com.infnet.libraryapi.model.StudentReplica;
 
 import java.time.LocalDate;
 
 /**
- * Composicao dos dois servicos: livro e datas vem do librarydb, nome/matricula/
- * curso vem do students-api. Com o microsservico fora do ar os campos remotos
- * caem para o nome copiado no emprestimo e {@code studentDataAvailable} vira false.
+ * Os dados do aluno vem da copia local (student_replica). Se o aluno ainda nao
+ * chegou por evento, cai para o nome copiado no emprestimo.
  */
 public record LoanResponse(
         Long id,
@@ -26,7 +25,7 @@ public record LoanResponse(
         LocalDate returnDate,
         LoanStatus status
 ) {
-    public static LoanResponse of(Loan loan, StudentDto student) {
+    public static LoanResponse of(Loan loan, StudentReplica student) {
         var book = loan.getBook();
         return new LoanResponse(
                 loan.getId(),
@@ -34,9 +33,9 @@ public record LoanResponse(
                 book != null ? book.getTitle() : null,
                 book != null ? book.getAuthor() : null,
                 loan.getStudentId(),
-                student != null ? student.name() : loan.getStudentName(),
-                student != null ? student.enrollmentNumber() : null,
-                student != null && student.course() != null ? student.course().name() : null,
+                student != null ? student.getName() : loan.getStudentName(),
+                student != null ? student.getEnrollmentNumber() : null,
+                student != null ? student.getCourseName() : null,
                 student != null,
                 loan.getLoanDate(),
                 loan.getDueDate(),

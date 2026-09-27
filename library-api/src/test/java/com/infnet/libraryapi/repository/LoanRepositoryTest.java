@@ -69,7 +69,7 @@ class LoanRepositoryTest {
 
     @Test
     void shouldPersistLoanForAStudentThatOnlyExistsInTheMicroservice() {
-        // sem FK, qualquer id e aceito aqui: quem valida e o StudentGateway
+        // sem FK, qualquer id e aceito aqui: quem valida e o LoanService pela copia local
         var saved = repository.save(newLoan(LoanStatus.ACTIVE, LocalDate.now(), LocalDate.now().plusDays(14), 9_999L));
 
         assertThat(saved.getId()).isNotNull();

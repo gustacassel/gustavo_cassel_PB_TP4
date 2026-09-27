@@ -1,47 +1,46 @@
 package com.infnet.libraryapi.controller;
 
-import com.infnet.libraryapi.client.dto.StudentDto;
-import com.infnet.libraryapi.service.StudentGateway;
+import com.infnet.libraryapi.model.StudentReplica;
+import com.infnet.libraryapi.service.StudentReplicaService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * A library-api nao e dona destes dados: apenas repassa a consulta via Feign.
- * Por isso ficam sob {@code /api/integration} e sao somente-leitura - qualquer
- * escrita vai direto ao microsservico.
+ * Somente leitura: a library-api nao e dona destes dados, apenas guarda a copia
+ * que recebe pelos eventos da students-api.
  */
 @RestController
 @RequestMapping("/api/integration/students")
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 public final class StudentDirectoryController {
-    private final StudentGateway studentGateway;
+    private final StudentReplicaService studentReplicaService;
 
-    public StudentDirectoryController(StudentGateway studentGateway) {
-        this.studentGateway = studentGateway;
+    public StudentDirectoryController(StudentReplicaService studentReplicaService) {
+        this.studentReplicaService = studentReplicaService;
     }
 
     @GetMapping
-    public List<StudentDto> getAll() {
-        return List.copyOf(studentGateway.indexAll().values());
+    public List<StudentReplica> getAll() {
+        return studentReplicaService.findAll();
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<StudentDto> getById(@PathVariable Long id) {
-        return studentGateway.findRequired(id)
+    public ResponseEntity<StudentReplica> getById(@PathVariable Long id) {
+        return studentReplicaService.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    /** Diagnostico da integracao: o microsservico esta respondendo? */
     @GetMapping("/health")
     public Map<String, Object> health() {
-        var students = studentGateway.indexAll();
-        return Map.of(
-                "service", "students-api",
-                "reachable", !students.isEmpty(),
-                "studentCount", students.size());
+        var payload = new LinkedHashMap<String, Object>();
+        payload.put("source", "students.events");
+        payload.put("studentCount", studentReplicaService.count());
+        payload.put("lastEventAt", studentReplicaService.lastEventAt().orElse(null));
+        return payload;
     }
 }
