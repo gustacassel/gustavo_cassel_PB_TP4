@@ -1,0 +1,26 @@
+name: library
+
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: library-rabbitmq
+    hostname: library-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP (usado pela library-api e pela students-api)
+      - "15672:15672" # painel de gerenciamento
+    environment:
+      # O usuario guest do RabbitMQ so aceita conexoes de localhost de dentro do
+      # container, entao criamos um usuario proprio para as aplicacoes.
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-library}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-library}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  rabbitmq-data:
