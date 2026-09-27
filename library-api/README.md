@@ -1,10 +1,11 @@
-# Library API — Sistema de Biblioteca
+# Library API - Sistema de Biblioteca
 
-API REST de gerenciamento de biblioteca desenvolvida na disciplina **Engenharia de Softwares Escaláveis** (Projeto de Bloco).
+API REST de gerenciamento de biblioteca desenvolvida na disciplina **Engenharia de Softwares Escaláveis** (Projeto de Bloco). A visão geral da arquitetura orientada a eventos está no [README da raiz](../README.md).
 
-- **TP1** — Monólito simples com Spring Boot: arquitetura em camadas (controller → service → repository), API REST com Spring MVC e front-end React ([library-frontend](../library-frontend)).
-- **TP2** — Camada de persistência real com **JPA + Spring Data**: mapeamento objeto-relacional, repositórios com consultas derivadas e `@Query`, **histórico de mudanças dos dados (auditoria)** e testes automatizados da camada de persistência.
-- **TP3** — Extração do domínio de estudantes para um **microsserviço** ([students-api](../students-api)), com comunicação distribuída via **Spring Cloud OpenFeign** e resiliência com **circuit breaker (Resilience4j)**.
+- **TP1** - Monólito simples com Spring Boot: arquitetura em camadas (controller → service → repository), API REST com Spring MVC e front-end React ([library-frontend](../library-frontend)).
+- **TP2** - Camada de persistência real com **JPA + Spring Data**: mapeamento objeto-relacional, repositórios com consultas derivadas e `@Query`, **histórico de mudanças dos dados (auditoria)** e testes automatizados da camada de persistência.
+- **TP3** - Extração do domínio de estudantes para um **microsserviço** ([students-api](../students-api)), integrado via Spring Cloud OpenFeign com circuit breaker.
+- **TP4** - O Feign foi removido. A `library-api` passou a **consumir eventos de aluno** do RabbitMQ para manter uma **cópia local** dos estudantes e a **publicar eventos de empréstimo** para a `students-api`.
 
 ## Tecnologias
 
@@ -13,27 +14,25 @@ API REST de gerenciamento de biblioteca desenvolvida na disciplina **Engenharia 
 | Java 21 / Spring Boot 4.1.0 | Base da aplicação (autoconfiguração, injeção de dependências) |
 | Spring Web MVC | API REST (`@RestController`, `@GetMapping`, ...) |
 | Spring Data JPA + Hibernate | Mapeamento objeto-relacional e repositórios |
-| **Spring Cloud OpenFeign** | Cliente HTTP declarativo para o microsserviço `students-api` |
-| **Spring Cloud CircuitBreaker + Resilience4j** | Tolerância a falhas na comunicação entre serviços |
+| **Spring AMQP (`spring-boot-starter-amqp`)** | Publicação e consumo de eventos no RabbitMQ |
 | Bean Validation (Jakarta) | Validação dos payloads de entrada |
 | H2 Database | Banco relacional em memória |
 | Lombok | Redução de boilerplate (`@Data`, construtores) |
 | JUnit 5 + AssertJ + Mockito | Testes automatizados (`@DataJpaTest`, `@SpringBootTest`) |
 
-> As duas aplicações usam **Spring Boot 4.1.0** e **Java 21**; a `library-api` acrescenta o BOM `spring-cloud-dependencies:2025.1.2`, que é o release train compatível com o Boot 4.x.
-
 ## Arquitetura
 
-Design em camadas, cada uma com responsabilidade única (SOLID):
+Design em camadas, cada uma com responsabilidade única (SOLID). No TP4 entrou o pacote `messaging`, que conversa com o RabbitMQ e só chama a camada de serviço:
 
 ```
 Controller  →  Service  →  Repository  →  Banco de dados (H2)
   (HTTP)      (regras de     (Spring Data JPA)
-               negócio +          ↘
-               auditoria)          StudentGateway → (HTTP) → students-api
+               negócio +
+               auditoria)
+                  ↑   ↓
+             messaging (RabbitMQ)
+   StudentEventListener   LoanEventPublisher
 ```
-
-### Diagrama de componentes (TP3)
 
 ```mermaid
 flowchart LR
@@ -41,79 +40,74 @@ flowchart LR
 
     subgraph L["library-api :8080"]
         C[Controllers<br/>Book / Loan / History / Integration]
-        S[Services<br/>Book / Loan / Audit]
-        GW[StudentGateway<br/>Feign + circuit breaker]
+        S[Services<br/>Book / Loan / Audit / StudentReplica]
         R[Repositories<br/>JpaRepository]
+        LST["StudentEventListener<br/>@RabbitListener"]
+        PUBL[LoanEventPublisher<br/>após o commit]
         C --> S --> R
-        S --> GW
-    end
-
-    subgraph M["students-api :8081"]
-        SC[Controllers<br/>Student / Course / History]
-        SR[Repositories]
-        SC --> SR
+        LST --> S
+        S --> PUBL
     end
 
     FE -->|livros, empréstimos| C
-    FE -->|estudantes, cursos| SC
-    GW -->|OpenFeign HTTP/JSON| SC
-    R -->|Hibernate / JPA| DB[(H2<br/>librarydb)]
-    SR --> SDB[(H2<br/>studentsdb)]
+    R --> DB[(H2 librarydb)]
+    Q1[["fila library.students<br/>(student.*)"]] --> LST
+    PUBL --> X2{{"exchange library.events<br/>(loan.*)"}}
 ```
 
-### O que mudou do TP2 para o TP3
+### O que mudou do TP3 para o TP4
 
-| | TP2 (monólito) | TP3 (microsserviço) |
+| | TP3 (OpenFeign) | TP4 (eventos) |
 |---|---|---|
-| Entidade `Student` | Dentro da `library-api` | Só no `students-api` |
-| Tabela `students` | No `librarydb` | No `studentsdb` |
-| `Loan` → aluno | `@ManyToOne` com FK `student_id` | Coluna `student_id` (`Long`), **sem FK** |
-| Integridade aluno↔empréstimo | Garantida pelo banco | Garantida pelo `StudentGateway` (camada de serviço) |
-| `GET /api/students` | Servido pela `library-api` | Servido pelo `students-api` (:8081) |
-| Falha do cadastro de alunos | Impossível (mesmo processo) | Tratada com circuit breaker e resposta degradada |
+| Dados do aluno | Buscados na `students-api` a cada uso | Lidos da tabela `student_replica`, alimentada por `student.created/updated/deleted` |
+| Criar empréstimo com a `students-api` fora do ar | `503` | `201` |
+| Listar empréstimos | Uma chamada HTTP para enriquecer a lista | Uma consulta local |
+| Avisar a `students-api` sobre empréstimos | Não existia | Publica `loan.created/returned/deleted` em `library.events` |
+| Excluir livro com empréstimo ativo | Apagava os empréstimos em cascata | `409` |
+| Classes removidas | - | `StudentClient`, `StudentDto`, `CourseDto`, `StudentGateway`, `StudentServiceUnavailableException` |
 
-## Comunicação entre os serviços
+## Mensageria
 
-### Cliente declarativo (OpenFeign)
+### Consumo: cópia local dos alunos
 
-A `library-api` não conhece a entidade `Student`, apenas um contrato de leitura:
+O [`StudentEventListener`](src/main/java/com/infnet/libraryapi/messaging/StudentEventListener.java) consome a fila `library.students` (ligada à exchange `students.events` pela routing key `student.*`) e entrega cada evento ao [`StudentReplicaService`](src/main/java/com/infnet/libraryapi/service/StudentReplicaService.java):
 
 ```java
-@FeignClient(name = "students-api", url = "${students-api.url}")
-public interface StudentClient {
-    @GetMapping("/api/students")        List<StudentDto> findAll();
-    @GetMapping("/api/students/{id}")   StudentDto findById(@PathVariable("id") Long id);
+@RabbitListener(queues = MessagingConfig.STUDENTS_QUEUE)
+public void onStudentEvent(StudentEvent event) {
+    replicaService.apply(event);
 }
 ```
 
-O `StudentDto` é uma **projeção**: só os campos que a biblioteca usa. Campos novos no microsserviço são ignorados, então o `students-api` pode evoluir o modelo sem quebrar a `library-api`.
+Regras aplicadas pelo `StudentReplicaService`:
 
-A URL vem de `students-api.url` no `application.properties` — mudar de ambiente é configuração, não código.
+| Situação | Tratamento |
+|---|---|
+| Evento com versão **maior** | Aplica e grava a nova versão |
+| Mesma versão (entrega repetida, curso renomeado) | Aplica de novo; o resultado é o mesmo (idempotente) |
+| Versão **menor** (chegou fora de ordem) | Descarta e registra em log |
+| `student.deleted` | Não apaga a linha: marca `deleted = true`. Assim um `updated` atrasado não recria o aluno, e o nome continua disponível para o histórico dos empréstimos |
 
-### Resiliência (circuit breaker)
+### Publicação: eventos de empréstimo
 
-Todo acesso remoto passa pelo [`StudentGateway`](src/main/java/com/infnet/libraryapi/service/StudentGateway.java), que envolve o Feign em um circuit breaker do Resilience4j e separa três situações que **só passam a existir depois da separação em microsserviços**:
+O `LoanService` registra um `LoanEvent` ao criar, devolver ou excluir um empréstimo. O [`LoanEventPublisher`](src/main/java/com/infnet/libraryapi/messaging/LoanEventPublisher.java) só envia ao RabbitMQ **depois do commit**:
 
-| Situação | Como o gateway trata | Resposta HTTP |
-|---|---|---|
-| Aluno existe | Retorna os dados | `200` / `201` |
-| Aluno não existe (`404` do microsserviço) | `Optional.empty()` — **não** conta como falha, não abre o circuito | `409` com a mensagem de negócio |
-| Microsserviço fora do ar / timeout | Modo estrito lança `StudentServiceUnavailableException`; modo tolerante devolve vazio | `503` na escrita, resposta degradada na leitura |
+```java
+@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+public void publish(LoanEvent event) {
+    rabbitTemplate.convertAndSend(MessagingConfig.LIBRARY_EXCHANGE, event.type().routingKey(), event, ...);
+}
+```
 
-Isso dá dois modos de uso deliberados:
+Se a transação sofrer rollback (livro inexistente, aluno trancado), nenhum evento sai. Se o broker estiver fora do ar no momento do envio, a falha fica no log e o empréstimo continua gravado.
 
-- **Estrito** (`findRequired`) — usado ao **criar** um empréstimo, onde não dá para prosseguir sem confirmar o aluno.
-- **Tolerante** (`tryFindById` / `indexAll`) — usado apenas para **enriquecer listagens**: com o microsserviço fora do ar, a `library-api` continua respondendo, caindo para o nome do aluno copiado no próprio empréstimo e marcando `studentDataAvailable: false`.
-
-O `indexAll()` carrega todos os alunos em **uma única chamada HTTP** e indexa por id, em vez de uma requisição por empréstimo (evita o N+1 distribuído).
-
-> O circuit breaker automático do Feign (`spring.cloud.openfeign.circuitbreaker.enabled`) fica **desligado de propósito**: ele envolveria as exceções em `NoFallbackAvailableException` e o gateway não conseguiria mais distinguir um `404` de uma falha de comunicação. O circuito é aplicado uma única vez, no `StudentGateway`.
+A topologia (exchanges, fila e binding) é declarada em [`MessagingConfig`](src/main/java/com/infnet/libraryapi/messaging/MessagingConfig.java). O catálogo completo dos eventos está no [README da raiz](../README.md#catálogo-de-eventos).
 
 ## Modelo de dados
 
-O domínio da biblioteca foi modelado considerando os requisitos de consulta (buscas por título/autor/status, empréstimos em atraso, histórico por registro) e o isolamento do domínio. **No TP3 o isolamento passou de lógico para físico:** o agregado de estudante saiu deste banco e virou um serviço.
+O domínio da biblioteca foi modelado considerando os requisitos de consulta (buscas por título/autor/status, empréstimos em atraso, histórico por registro) e o isolamento do domínio. A tabela `students` saiu deste banco no TP3; no TP4 entrou a `student_replica`, uma **cópia somente leitura** mantida por eventos.
 
-Banco **`librarydb`** — repare que a tabela `students` não existe mais aqui:
+Banco **`librarydb`**:
 
 ```mermaid
 erDiagram
@@ -131,7 +125,7 @@ erDiagram
     LOANS {
         bigint id PK
         bigint book_id FK
-        bigint student_id "id remoto - sem FK"
+        bigint student_id "id do aluno - sem FK"
         varchar student_name "cópia do nome no momento do empréstimo"
         date loan_date "NOT NULL"
         date due_date "NOT NULL"
@@ -139,6 +133,18 @@ erDiagram
         varchar status "ACTIVE | RETURNED | OVERDUE"
         timestamp created_at
         timestamp updated_at
+    }
+    STUDENT_REPLICA {
+        bigint id PK "mesmo id da students-api"
+        varchar name
+        varchar email
+        varchar enrollment_number
+        varchar status "ATIVO | TRANCADO | FORMADO | DESLIGADO"
+        bigint course_id
+        varchar course_name
+        bigint version "versão do último evento aplicado"
+        boolean deleted
+        timestamp last_event_at
     }
     AUDIT_LOG {
         bigint id PK
@@ -154,25 +160,23 @@ erDiagram
 
 Cada serviço é dono do seu banco, então não existe FK atravessando a fronteira. Duas consequências deliberadas:
 
-1. **A integridade sobe uma camada** — quem garante que o `student_id` existe (e que o aluno está `ATIVO`) é o `LoanService`, consultando o microsserviço antes de gravar. O banco não tem mais como saber.
-2. **`student_name` é uma cópia proposital** — guardar o nome no momento do empréstimo mantém o histórico legível mesmo com o microsserviço fora do ar ou se o aluno for removido de lá depois. É desnormalização consciente, o preço normal de separar serviços.
+1. **A integridade sobe uma camada**: quem garante que o aluno existe e está `ATIVO` é o `LoanService`, consultando a `student_replica` antes de gravar.
+2. **`student_name` é uma cópia proposital**: guardar o nome no momento do empréstimo mantém o histórico legível mesmo que o aluno ainda não tenha chegado na cópia local ou tenha sido removido depois.
 
 ### Mapeamento JPA
 
 - `@Entity` + `@Table` transformam cada classe do domínio em tabela; `@Column` define restrições de integridade (`nullable`, `unique`, `length`).
-- `@Id` + `@GeneratedValue(strategy = GenerationType.IDENTITY)` — chave primária com auto-incremento.
-- Relacionamentos: `Loan` tem `@ManyToOne` + `@JoinColumn` para `Book` (FK `book_id`); o lado inverso usa `@OneToMany(mappedBy = ..., cascade = CascadeType.ALL)` com `@JsonIgnore` para evitar recursão infinita na serialização JSON. A referência ao aluno virou uma coluna simples `@Column(name = "student_id")`.
+- `@Id` + `@GeneratedValue(strategy = GenerationType.IDENTITY)` para livros, empréstimos e auditoria. A `StudentReplica` usa `@Id` **sem** geração, porque o id vem da `students-api`.
+- Relacionamentos: `Loan` tem `@ManyToOne` + `@JoinColumn` para `Book` (FK `book_id`); o lado inverso usa `@OneToMany(mappedBy = ..., cascade = CascadeType.ALL)` com `@JsonIgnore` para evitar recursão na serialização JSON.
 - `@Enumerated(EnumType.STRING)` grava os enums (`LoanStatus`, `AuditAction`) como texto legível no banco.
-- `@EnableJpaAuditing` foi movido da classe da aplicação para [`JpaAuditingConfig`](src/main/java/com/infnet/libraryapi/config/JpaAuditingConfig.java), para que testes de fatia web não tentem inicializar o metamodelo JPA.
+- `@EnableJpaAuditing` fica em [`JpaAuditingConfig`](src/main/java/com/infnet/libraryapi/config/JpaAuditingConfig.java), para que testes de fatia web não tentem inicializar o metamodelo JPA.
 
 ## Histórico de mudanças (auditoria e rastreabilidade)
 
 Duas camadas complementares de rastreabilidade:
 
-1. **Auditoria de datas (Spring Data JPA Auditing)** — toda entidade tem `createdAt` e `updatedAt` preenchidos automaticamente pelo `AuditingEntityListener` (`@CreatedDate`, `@LastModifiedDate`, habilitado com `@EnableJpaAuditing`).
-2. **Histórico consultável (`audit_log`)** — toda operação de escrita (CREATE, UPDATE, DELETE) feita pelos services gera um registro no `AuditService` com a entidade afetada, a ação e um detalhamento — em updates, o diff campo a campo (`title: 'Clean Code' -> 'Clean Code: A Handbook'`).
-
-O histórico é consultado pela API:
+1. **Auditoria de datas (Spring Data JPA Auditing)**: toda entidade tem `createdAt` e `updatedAt` preenchidos automaticamente pelo `AuditingEntityListener` (`@CreatedDate`, `@LastModifiedDate`).
+2. **Histórico consultável (`audit_log`)**: toda operação de escrita (CREATE, UPDATE, DELETE) feita pelos services gera um registro no `AuditService` com a entidade afetada, a ação e um detalhamento; em updates, o diff campo a campo (`title: 'Clean Code' -> 'Clean Code: A Handbook'`).
 
 | Endpoint | Retorno |
 |---|---|
@@ -180,19 +184,23 @@ O histórico é consultado pela API:
 | `GET /api/history/{entidade}` | Histórico de uma entidade (`BOOK`, `LOAN`) |
 | `GET /api/history/{entidade}/{id}` | Histórico de um registro específico |
 
-O histórico de `STUDENT` migrou junto com o domínio: agora fica em `GET http://localhost:8081/api/history/STUDENT`. Cada serviço audita apenas o que é seu.
+O histórico de `STUDENT` fica na `students-api` (`GET http://localhost:8081/api/history/STUDENT`). Cada serviço audita apenas o que é seu.
 
-## Repositórios Spring Data — exemplos de uso
+## Repositórios Spring Data - exemplos de uso
 
-Os repositórios são interfaces que estendem `JpaRepository<Entidade, Long>` e herdam `save`, `findAll`, `findById`, `delete` etc. Consultas específicas do domínio usam **query methods derivados** (o Spring Data gera o SQL a partir do nome do método) e **`@Query`** (JPQL) quando a consulta é mais elaborada:
+Os repositórios são interfaces que estendem `JpaRepository<Entidade, Long>` e herdam `save`, `findAll`, `findById`, `delete` etc. Consultas específicas usam **query methods derivados** e **`@Query`** (JPQL) quando a consulta é mais elaborada:
 
 ```java
-// Query methods derivados — o Spring Data gera a consulta pelo nome
+// Query methods derivados
 List<Book> findByTitleContainingIgnoreCase(String title);
 List<Loan> findByStatus(LoanStatus status);
-List<Loan> findByStudentId(Long studentId);   // id remoto, vindo do microsserviço
+boolean existsByBookIdAndStatus(Long bookId, LoanStatus status);   // livro emprestado?
 
-// JPQL com @Query — empréstimos ativos com devolução vencida
+// cópia local dos alunos
+Optional<StudentReplica> findByIdAndDeletedFalse(Long id);
+List<StudentReplica> findByDeletedFalseOrderByNameAsc();
+
+// JPQL com @Query - empréstimos ativos com devolução vencida
 @Query("SELECT l FROM Loan l WHERE l.status = com.infnet.libraryapi.model.LoanStatus.ACTIVE AND l.dueDate < :date")
 List<Loan> findOverdue(@Param("date") LocalDate date);
 ```
@@ -200,166 +208,137 @@ List<Loan> findOverdue(@Param("date") LocalDate date);
 Uso na camada de serviço:
 
 ```java
-var overdueLoans = loanRepository.findOverdue(LocalDate.now());
-var martinBooks = bookRepository.findByAuthorContainingIgnoreCase("martin");
+// LoanService.create - o aluno vem da cópia local, sem chamada HTTP
+var student = studentReplicaService.findById(request.studentId())
+        .orElseThrow(() -> new BusinessException("Estudante %d nao encontrado".formatted(request.studentId())));
 
-// O aluno não vem mais de um repositório, e sim do microsserviço:
-var student = studentGateway.findRequired(42L);   // Optional<StudentDto>
+// LoanService.enrich - uma consulta para a lista inteira
+Map<Long, StudentReplica> students = studentReplicaService.indexByIds(studentIds);
 ```
-
-Os repositórios de estudante migraram para o microsserviço — veja [students-api/README.md](../students-api/README.md#repositórios-spring-data--exemplos-de-uso).
 
 ## Endpoints da API
 
 | Método | Endpoint | Descrição |
 |---|---|---|
 | GET/POST | `/api/books` | Lista / cadastra livros |
-| GET/PUT/DELETE | `/api/books/{id}` | Busca / atualiza / remove livro |
+| GET/PUT/DELETE | `/api/books/{id}` | Busca / atualiza / remove livro (`409` se houver empréstimo ativo) |
 | GET | `/api/books/search/title/{title}` | Busca por título (parcial, sem caixa) |
 | GET | `/api/books/search/author/{author}` | Busca por autor |
-| GET/POST | `/api/loans` | Lista / cria empréstimos (resposta **enriquecida** com dados do microsserviço) |
-| GET/DELETE | `/api/loans/{id}` | Busca / remove empréstimo |
-| PUT | `/api/loans/{id}/return` | Registra a devolução |
+| GET/POST | `/api/loans` | Lista / cria empréstimos (publica `loan.created`) |
+| GET/DELETE | `/api/loans/{id}` | Busca / remove empréstimo (publica `loan.deleted`) |
+| PUT | `/api/loans/{id}/return` | Registra a devolução (publica `loan.returned`) |
 | GET | `/api/loans/status/{status}` | Filtra por status (`ACTIVE`, `RETURNED`, `OVERDUE`) |
 | GET | `/api/loans/student/{id}` / `/api/loans/book/{id}` | Empréstimos por aluno / livro |
 | GET | `/api/loans/overdue` | Empréstimos ativos vencidos |
 | GET | `/api/history[/{entidade}[/{id}]]` | Consulta o histórico de mudanças |
 
-### Novos endpoints do TP3 — integração com o microsserviço
+### Cópia local dos alunos (`/api/integration/students`)
 
-Somente leitura, e sob `/api/integration` justamente para deixar explícito que a `library-api` **não é dona** desses dados: ela só repassa a consulta via Feign. Qualquer escrita deve ir direto ao `students-api` (:8081).
+Somente leitura. A `library-api` não é dona desses dados; escrita de aluno vai direto na `students-api` (:8081).
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| GET | `/api/integration/students` | Lista os alunos **através** do microsserviço |
-| GET | `/api/integration/students/{id}` | Busca um aluno — `404` se não existe, `503` se o microsserviço não responde |
-| GET | `/api/integration/students/health` | Diagnóstico da integração: `{ "service": "students-api", "reachable": true, "studentCount": 4 }` |
+| GET | `/api/integration/students` | Alunos da cópia local (sem os removidos) |
+| GET | `/api/integration/students/{id}` | Um aluno da cópia local, `404` se não existir |
+| GET | `/api/integration/students/health` | Estado da cópia: `{ "source": "students.events", "studentCount": 4, "lastEventAt": "2026-09-27T21:39:15Z" }` |
 
-O `/health` é a prova mais direta de que a comunicação entre os serviços funciona: ele responde a partir de uma chamada Feign real, não de um ping do front-end.
-
-### Contrato do empréstimo mudou
-
-O payload de criação agora referencia o aluno por id, e a resposta é o `LoanResponse`, que **compõe** dado local com dado remoto:
+### Contrato do empréstimo
 
 ```jsonc
-// POST /api/loans  — requisição
+// POST /api/loans - requisição
 { "bookId": 1, "studentId": 1 }
 
-// resposta 201 — livro e datas vêm do librarydb; nome, matrícula e curso vêm do students-api
+// resposta 201 - livro e datas do librarydb; nome, matrícula e curso da student_replica
 {
   "id": 1,
   "bookId": 1, "bookTitle": "Clean Architecture", "bookAuthor": "Robert C. Martin",
   "studentId": 1, "studentName": "Maria Silva",
   "studentEnrollmentNumber": "2026001", "studentCourseName": "Engenharia de Software",
   "studentDataAvailable": true,
-  "loanDate": "2026-08-12", "dueDate": "2026-08-26", "returnDate": null, "status": "ACTIVE"
+  "loanDate": "2026-09-27", "dueDate": "2026-10-11", "returnDate": null, "status": "ACTIVE"
 }
 ```
 
-O campo `studentDataAvailable` é o sinal honesto para o front-end: quando ele vem `false`, os campos remotos não puderam ser carregados e o `studentName` é a cópia local.
+`studentDataAvailable: false` indica que o aluno não está na cópia local; nesse caso o `studentName` é o nome copiado no próprio empréstimo.
 
-### Exemplo de fluxo (Postman/curl)
-
-Com os **dois** serviços no ar:
+### Exemplo de fluxo (curl)
 
 ```bash
-# 1. Cadastrar livro na library-api e aluno no microsserviço
+# 1. Os alunos cadastrados na students-api chegam por evento
+curl http://localhost:8080/api/integration/students/health
+# {"source":"students.events","studentCount":4,"lastEventAt":"..."}
+
+# 2. Cadastrar livro e criar empréstimo (validado na cópia local)
 curl -X POST http://localhost:8080/api/books -H "Content-Type: application/json" \
   -d '{"title":"Clean Architecture","author":"Robert C. Martin","isbn":"9780134494166","publicationYear":2017}'
-curl -X POST http://localhost:8081/api/students -H "Content-Type: application/json" \
-  -d '{"name":"Maria Silva","email":"maria@infnet.edu.br","enrollmentNumber":"2026001","status":"ATIVO","currentSemester":5,"courseId":1}'
+curl -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" -d '{"bookId":1,"studentId":1}'
 
-# 2. Conferir se a integração está de pé
-curl http://localhost:8080/api/integration/students/health
-# {"service":"students-api","studentCount":4,"reachable":true}
-
-# 3. Criar empréstimo — a library-api valida o aluno no microsserviço antes de gravar
-curl -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" \
-  -d '{"bookId":1,"studentId":1}'
-
-# 4. Devolver e consultar o histórico local
+# 3. Devolver e consultar o histórico local
 curl -X PUT http://localhost:8080/api/loans/1/return
 curl http://localhost:8080/api/history/LOAN/1
 ```
 
-Cenários de erro que só existem por causa da separação:
+Cenários de erro e de falha:
 
 ```bash
-# Aluno com matrícula trancada -> 409 (regra de negócio)
+# Aluno trancado -> 409 (validado localmente)
 curl -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" -d '{"bookId":1,"studentId":4}'
 # {"status":409,"message":"O estudante 'Pedro Santos' esta com situacao TRANCADO e nao pode pegar livros emprestados"}
 
-# Aluno inexistente -> 409
+# Aluno que não está na cópia local -> 409
 curl -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" -d '{"bookId":1,"studentId":999}'
-# {"status":409,"message":"Estudante 999 nao encontrado no microsservico de estudantes"}
+# {"status":409,"message":"Estudante 999 nao encontrado"}
 
-# Com o students-api DERRUBADO:
-curl -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" -d '{"bookId":1,"studentId":1}'
-# {"status":503,"message":"Microsservico de estudantes indisponivel no momento"}   <- não é 500
+# Livro com empréstimo ativo -> 409
+curl -X DELETE http://localhost:8080/api/books/1
 
-curl http://localhost:8080/api/loans
-# a lista continua respondendo, com "studentDataAvailable": false e o nome copiado localmente
-
-curl http://localhost:8080/api/books
-# domínio local intacto — a falha do microsserviço não derruba a biblioteca
+# Com a students-api DERRUBADA o empréstimo continua funcionando (no TP3 era 503)
+curl -X POST http://localhost:8080/api/loans -H "Content-Type: application/json" -d '{"bookId":2,"studentId":2}'
 ```
 
 ## Banco de dados
 
-H2 em memória, configurado em [`application.properties`](src/main/resources/application.properties). O Hibernate cria/atualiza as tabelas automaticamente a partir das entidades (`spring.jpa.hibernate.ddl-auto=update`) e o SQL executado é exibido no console (`show-sql=true`).
+H2 em memória, configurado em [`application.properties`](src/main/resources/application.properties). O Hibernate cria/atualiza as tabelas a partir das entidades (`spring.jpa.hibernate.ddl-auto=update`) e o SQL executado é exibido no console (`show-sql=true`).
 
-Console web do H2: com a aplicação rodando, acesse `http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:mem:librarydb`, usuário `sa`, senha em branco).
+Console web do H2: `http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:mem:librarydb`, usuário `sa`, senha em branco).
+
+Como o banco é em memória, reiniciar a aplicação apaga também a cópia local dos alunos; ela volta a ser preenchida conforme novos eventos chegam.
 
 ## Como executar
 
-O sistema agora tem **três processos**. Suba o microsserviço primeiro (a biblioteca depende dele, não o contrário):
+Precisa do RabbitMQ no ar (`docker compose up -d` na raiz do repositório).
 
 ```bash
-# 1. Microsserviço de estudantes — http://localhost:8081
-cd ../students-api && ./mvnw spring-boot:run
-
-# 2. Biblioteca — http://localhost:8080
-cd ../library-api && ./mvnw spring-boot:run
-
-# 3. Front-end — http://localhost:5173
-cd ../library-frontend/library-frontend && npm install && npm run dev
+./mvnw spring-boot:run     # http://localhost:8080
 ```
 
-A `library-api` **sobe normalmente mesmo sem o microsserviço**: não há dependência no start, só em runtime, e ela responde degradada até o `students-api` voltar.
+Na primeira execução, suba a `library-api` **antes** da `students-api`: é ela que cria a fila `library.students`. Depois disso a fila fica no RabbitMQ e a ordem deixa de importar.
 
-| Serviço | Porta | Banco H2 | Console H2 |
-|---|---|---|---|
-| `library-api` | 8080 | `librarydb` | http://localhost:8080/h2-console |
-| `students-api` | 8081 | `studentsdb` | http://localhost:8081/h2-console |
-| `library-frontend` | 5173 | — | — |
+Conexão com o broker (valores padrão iguais aos do `docker-compose.yml`, sobrescrevíveis por variável de ambiente):
+
+```properties
+spring.rabbitmq.host=${RABBITMQ_HOST:localhost}
+spring.rabbitmq.port=${RABBITMQ_PORT:5672}
+spring.rabbitmq.username=${RABBITMQ_USER:library}
+spring.rabbitmq.password=${RABBITMQ_PASSWORD:library}
+```
 
 ## Testes automatizados
 
 ```bash
-./mvnw test                      # library-api  — 27 testes
-cd ../students-api && ./mvnw test  # students-api — 33 testes
+./mvnw test     # 38 testes
 ```
 
-### library-api (27 testes)
+| Teste | Tipo | O que cobre |
+|---|---|---|
+| `BookRepositoryTest` | `@DataJpaTest` | CRUD, query methods derivados, `createdAt`/`updatedAt` automáticos |
+| `LoanRepositoryTest` | `@DataJpaTest` | `@ManyToOne` com `Book`, `student_id` sem FK, filtro por status e JPQL de atrasados |
+| `AuditLogRepositoryTest` | `@DataJpaTest` | Timestamp automático e consultas do histórico |
+| `DataHistoryIntegrationTest` | `@SpringBootTest` | Cada escrita gera histórico consultável, com diff no UPDATE |
+| `StudentReplicaServiceTest` | `@SpringBootTest` | Cópia local: inserção, versões novas, eventos fora de ordem, entrega duplicada, curso renomeado, marcação de removido |
+| `LoanStudentValidationTest` | `@SpringBootTest` | Empréstimo validado pela cópia local: aluno ativo, inexistente, trancado por evento, removido por evento; nome atualizado nos empréstimos existentes |
+| `LoanEventPublishingTest` | `@SpringBootTest` + `@RecordApplicationEvents` | Evento para cada etapa do empréstimo, nenhum evento em operação recusada, routing key, falha do broker não propaga, bloqueio de exclusão de livro emprestado |
+| `StudentEventListenerTest` | Unitário (Mockito) | Delegação ao service e leitura do JSON no formato publicado pela `students-api` |
+| `LibraryapiApplicationTests` | `@SpringBootTest` | Carga do contexto |
 
-- **`BookRepositoryTest`** (`@DataJpaTest`) — CRUD, query methods derivados, preenchimento automático de `createdAt`/`updatedAt` e integridade.
-- **`LoanRepositoryTest`** (`@DataJpaTest` + `TestEntityManager`) — persistência do `@ManyToOne` com `Book`, a referência ao aluno remoto **sem FK** (grava um `student_id` que só existe no microsserviço), filtro por status e a JPQL de atrasados.
-- **`AuditLogRepositoryTest`** (`@DataJpaTest`) — gravação com timestamp automático e consultas do histórico.
-- **`DataHistoryIntegrationTest`** (`@SpringBootTest`) — cada operação de escrita do service gera registro de histórico consultável, incluindo o diff de campos no UPDATE.
-- **`StudentIntegrationTest`** (`@SpringBootTest` + `@MockitoBean` no `StudentClient`) — **os testes novos do TP3**. Com o cliente Feign mockado dá para simular as três situações que só existem depois da separação:
-
-  | Cenário | Comportamento esperado |
-  |---|---|
-  | Aluno ativo | Empréstimo criado e resposta enriquecida com nome, matrícula e curso |
-  | Aluno inexistente (`404` do microsserviço) | `BusinessException` — não é tratado como falha de comunicação |
-  | Aluno `TRANCADO` | `BusinessException` citando a situação |
-  | Microsserviço fora do ar | `StudentServiceUnavailableException` (vira `503`, não `500`) |
-  | Listagem com o microsserviço fora do ar | Continua respondendo, `studentDataAvailable = false` e nome vindo da cópia local |
-  | Listagem com vários empréstimos | Uma única chamada remota enriquece a lista inteira |
-  | Histórico | O log do empréstimo guarda o nome do aluno vindo do microsserviço |
-
-  O circuit breaker é configurado para não abrir durante os testes (`minimum-number-of-calls` alto via `@TestPropertySource`), de modo que cada cenário seja avaliado isoladamente e não dependa da ordem de execução.
-
-### students-api (33 testes)
-
-Cobrem repositórios, serviços e os endpoints REST do microsserviço — detalhados em [students-api/README.md](../students-api/README.md#testes-automatizados).
+Os testes não precisam do RabbitMQ: os listeners ficam desligados (`spring.rabbitmq.listener.simple.auto-startup=false`) e o `RabbitTemplate` é mockado onde a publicação é verificada. O arquivo [`src/test/resources/spring.properties`](src/test/resources/spring.properties) desliga a pausa de contextos do Spring 7, que religaria os listeners ao reaproveitar um contexto em cache.
