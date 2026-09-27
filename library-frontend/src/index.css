@@ -1,4 +1,29 @@
 :root {
+    --aurora-ink: #161d2f;
+    --aurora-ink-soft: #232c45;
+    --aurora-primary: #4353c9;
+    --aurora-primary-rgb: 67, 83, 201;
+    --aurora-primary-dark: #3342a8;
+    --aurora-accent: #f2a541;
+    --aurora-accent-rgb: 242, 165, 65;
+    --aurora-bg: #f4f5fa;
+    --aurora-surface: #ffffff;
+    --aurora-border: #e5e7f0;
+    --aurora-muted: #6b7288;
+    --aurora-radius: 1rem;
+    --aurora-shadow: 0 1px 2px rgba(22, 29, 47, 0.04), 0 8px 24px rgba(22, 29, 47, 0.06);
+
+    --bs-primary: var(--aurora-primary);
+    --bs-primary-rgb: var(--aurora-primary-rgb);
+    --bs-link-color: var(--aurora-primary);
+    --bs-link-color-rgb: var(--aurora-primary-rgb);
+    --bs-link-hover-color: var(--aurora-primary-dark);
+    --bs-body-bg: var(--aurora-bg);
+    --bs-body-color: var(--aurora-ink);
+    --bs-secondary-color: var(--aurora-muted);
+    --bs-border-color: var(--aurora-border);
+    --bs-body-font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -22,10 +47,79 @@ h3,
 h4,
 h5,
 h6 {
-    font-weight: 500;
-    color: var(--bs-heading-color);
+    font-weight: 600;
+    color: var(--aurora-ink);
+    letter-spacing: -0.01em;
 }
 
 p {
     margin: 0;
+}
+
+.btn {
+    border-radius: 0.65rem;
+    font-weight: 500;
+}
+
+.btn-primary {
+    --bs-btn-bg: var(--aurora-primary);
+    --bs-btn-border-color: var(--aurora-primary);
+    --bs-btn-hover-bg: var(--aurora-primary-dark);
+    --bs-btn-hover-border-color: var(--aurora-primary-dark);
+    --bs-btn-active-bg: var(--aurora-primary-dark);
+    --bs-btn-active-border-color: var(--aurora-primary-dark);
+    --bs-btn-disabled-bg: var(--aurora-primary);
+    --bs-btn-disabled-border-color: var(--aurora-primary);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--aurora-primary);
+    --bs-btn-border-color: rgba(var(--aurora-primary-rgb), 0.45);
+    --bs-btn-hover-bg: rgba(var(--aurora-primary-rgb), 0.1);
+    --bs-btn-hover-color: var(--aurora-primary-dark);
+    --bs-btn-hover-border-color: var(--aurora-primary);
+    --bs-btn-active-bg: rgba(var(--aurora-primary-rgb), 0.16);
+    --bs-btn-active-color: var(--aurora-primary-dark);
+    --bs-btn-active-border-color: var(--aurora-primary);
+}
+
+.badge {
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 0.4em 0.75em;
+}
+
+/* SweetAlert com a mesma identidade visual */
+.swal2-popup {
+    border-radius: 1.25rem !important;
+    font-family: var(--bs-body-font-family) !important;
+}
+
+.swal2-confirm {
+    background-color: var(--aurora-primary) !important;
+    border-radius: 0.65rem !important;
+}
+
+.swal2-input,
+.swal2-select {
+    border-radius: 0.65rem !important;
+    font-size: 0.95rem !important;
+}
+
+.swal2-select,
+.swal2-input[type="date"] {
+    width: calc(100% - 4.4em);
+    max-width: 100%;
+    margin: 1em 2.2em 3px !important;
+    padding: 0.55em 0.75em;
+    border: 1px solid #d9d9d9;
+}
+
+.swal-form-label {
+    display: block;
+    text-align: left;
+    margin: 1em 2.2em -0.4em;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--aurora-muted);
 }

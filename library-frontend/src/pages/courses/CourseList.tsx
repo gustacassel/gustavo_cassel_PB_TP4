@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react"
-import { Badge, Button, Card, Col, Container, Row, Spinner, Table } from "react-bootstrap"
-import { Link } from "react-router-dom"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Badge, Button, Spinner, Table } from "react-bootstrap"
 import Swal from "sweetalert2"
+import PageHeader from "../../components/PageHeader"
+import StatCard from "../../components/StatCard"
 import { createCourse, deleteCourse, getCourseSummary, updateCourse } from "../../services/courses-api"
 import {
     DEGREE_LEVELS,
@@ -10,10 +11,7 @@ import {
     type CourseSummary,
     type DegreeLevel,
 } from "../../types/courses"
-import "../shared/ListPage.css"
-
-const escapeHtml = (value: string) =>
-    value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+import { errorMessage, escapeHtml } from "../../utils/format"
 
 const levelOptions = (selected: DegreeLevel) =>
     DEGREE_LEVELS.map(
@@ -25,13 +23,12 @@ const levelOptions = (selected: DegreeLevel) =>
 
 const readForm = (): CourseInput | null => {
     const value = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value ?? ""
-    const selected = (id: string) => (document.getElementById(id) as HTMLSelectElement | null)?.value ?? ""
 
     const name = value("course-name").trim()
     const code = value("course-code").trim()
     const department = value("course-department").trim()
     const durationSemesters = Number(value("course-duration"))
-    const degreeLevel = selected("course-level") as DegreeLevel
+    const degreeLevel = value("course-level") as DegreeLevel
 
     if (!name || !code) {
         Swal.showValidationMessage("Nome e código são obrigatórios.")
@@ -53,12 +50,9 @@ const readForm = (): CourseInput | null => {
 }
 
 const formHtml = (course?: CourseSummary) => `
-    <input id="course-name" class="swal2-input" placeholder="Nome do curso" value="${escapeHtml(
-        course?.name ?? "",
-    )}">
-    <input id="course-code" class="swal2-input" placeholder="Código (ex.: ESW)" value="${escapeHtml(
-        course?.code ?? "",
-    )}">
+    <input id="course-name" class="swal2-input" placeholder="Nome do curso" value="${escapeHtml(course?.name ?? "")}">
+    <input id="course-code" class="swal2-input" placeholder="Código (ex.: ESW)" value="${escapeHtml(course?.code ?? "")}">
+    <label class="swal-form-label" for="course-level">Nível</label>
     <select id="course-level" class="swal2-select">${levelOptions(course?.degreeLevel ?? "GRADUACAO")}</select>
     <input id="course-duration" class="swal2-input" placeholder="Duração em semestres" type="number" min="1" max="20" value="${
         course?.durationSemesters ?? 8
@@ -73,7 +67,31 @@ export default function CourseList() {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
-    const totalCourses = courses.length
+    const fetchData = useCallback(async () => {
+        try {
+            setCourses(await getCourseSummary())
+            setError(null)
+        } catch (err) {
+            setError(
+                `${errorMessage(err, "Não foi possível carregar os cursos.")} — verifique se a students-api está no ar na porta 8081.`,
+            )
+        } finally {
+            setIsLoading(false)
+        }
+    }, [])
+
+    const load = useCallback(async () => {
+        setIsLoading(true)
+        await fetchData()
+    }, [fetchData])
+
+    useEffect(() => {
+        const run = async () => {
+            await fetchData()
+        }
+        run()
+    }, [fetchData])
+
     const totalActiveStudents = useMemo(
         () => courses.reduce((sum, course) => sum + course.activeStudents, 0),
         [courses],
@@ -83,49 +101,14 @@ export default function CourseList() {
         [courses],
     )
 
-    useEffect(() => {
-        let isMounted = true
-
-        const load = async () => {
-            try {
-                setIsLoading(true)
-                const data = await getCourseSummary()
-                if (isMounted) {
-                    setCourses(data)
-                    setError(null)
-                }
-            } catch (err) {
-                if (isMounted) {
-                    const message = err instanceof Error ? err.message : "Não foi possível carregar os cursos."
-                    setError(
-                        `${message} — verifique se o microsserviço students-api está no ar em http://localhost:8081.`,
-                    )
-                }
-            } finally {
-                if (isMounted) {
-                    setIsLoading(false)
-                }
-            }
-        }
-
-        load()
-
-        return () => {
-            isMounted = false
-        }
-    }, [])
-
-    const reload = async () => {
-        setCourses(await getCourseSummary())
-    }
-
     const handleAddCourse = async () => {
         const result = await Swal.fire({
-            title: "Adicionar curso",
+            title: "Novo curso",
             html: formHtml(),
             focusConfirm: false,
             showCancelButton: true,
             confirmButtonText: "Salvar",
+            cancelButtonText: "Cancelar",
             preConfirm: readForm,
         })
 
@@ -135,11 +118,10 @@ export default function CourseList() {
 
         try {
             await createCourse(result.value)
-            await reload()
+            await load()
             await Swal.fire("Salvo", "Curso cadastrado com sucesso.", "success")
         } catch (err) {
-            const message = err instanceof Error ? err.message : "Não foi possível salvar o curso."
-            await Swal.fire("Erro", message, "error")
+            await Swal.fire("Erro", errorMessage(err, "Não foi possível salvar o curso."), "error")
         }
     }
 
@@ -150,6 +132,7 @@ export default function CourseList() {
             focusConfirm: false,
             showCancelButton: true,
             confirmButtonText: "Atualizar",
+            cancelButtonText: "Cancelar",
             preConfirm: readForm,
         })
 
@@ -159,11 +142,10 @@ export default function CourseList() {
 
         try {
             await updateCourse(course.id, result.value)
-            await reload()
+            await load()
             await Swal.fire("Atualizado", "Curso atualizado com sucesso.", "success")
         } catch (err) {
-            const message = err instanceof Error ? err.message : "Não foi possível atualizar o curso."
-            await Swal.fire("Erro", message, "error")
+            await Swal.fire("Erro", errorMessage(err, "Não foi possível atualizar o curso."), "error")
         }
     }
 
@@ -174,6 +156,7 @@ export default function CourseList() {
             icon: "warning",
             showCancelButton: true,
             confirmButtonText: "Excluir",
+            cancelButtonText: "Cancelar",
         })
 
         if (!result.isConfirmed) {
@@ -182,134 +165,131 @@ export default function CourseList() {
 
         try {
             await deleteCourse(course.id)
-            await reload()
+            await load()
             await Swal.fire("Excluído", "Curso removido com sucesso.", "success")
         } catch (err) {
-            // o microsserviço recusa com 409 se o curso ainda tem alunos
-            const message = err instanceof Error ? err.message : "Não foi possível remover o curso."
-            await Swal.fire("Erro", message, "error")
+            // 409 quando o curso ainda tem alunos
+            await Swal.fire("Não foi possível excluir", errorMessage(err, "Erro ao remover o curso."), "error")
         }
     }
 
     return (
-        <Container className="py-5 list-page">
-            <div className="list-hero mb-4">
-                <div className="d-flex flex-wrap justify-content-between align-items-center gap-3">
-                    <div>
-                        <p className="eyebrow">Microsserviço students-api</p>
-                        <h1 className="mb-2">Cursos</h1>
-                        <p className="text-secondary mb-0">
-                            Cursos oferecidos e quantos alunos ativos cada um tem.
-                        </p>
-                    </div>
-                    <div className="d-flex gap-2 flex-wrap">
-                        <Link to="/" className="btn btn-outline-secondary">
-                            Voltar ao início
-                        </Link>
-                        <Link to="/students" className="btn btn-outline-primary">
-                            Estudantes
-                        </Link>
-                        <Button variant="primary" onClick={handleAddCourse}>
-                            <i className="bi bi-mortarboard me-2" />
-                            Novo curso
-                        </Button>
-                    </div>
-                </div>
+        <>
+            <PageHeader
+                eyebrow="students-api"
+                title="Cursos"
+                description="Cursos oferecidos e quantos alunos ativos cada um tem."
+                actions={
+                    <Button variant="primary" onClick={handleAddCourse}>
+                        <i className="bi bi-mortarboard me-2" />
+                        Novo curso
+                    </Button>
+                }
+            />
+
+            <div className="stat-grid">
+                <StatCard label="Cursos" value={courses.length} icon="bi-mortarboard" isLoading={isLoading} />
+                <StatCard
+                    label="Alunos ativos"
+                    value={totalActiveStudents}
+                    icon="bi-person-check"
+                    tone="success"
+                    isLoading={isLoading}
+                />
+                <StatCard
+                    label="Maior duração"
+                    value={longestCourse ? `${longestCourse} semestres` : "-"}
+                    icon="bi-hourglass-split"
+                    tone="neutral"
+                    isLoading={isLoading}
+                />
             </div>
 
-            <Row className="g-4 mb-4">
-                {[
-                    { label: "Total de cursos", value: totalCourses.toString() },
-                    { label: "Alunos ativos", value: totalActiveStudents.toString() },
-                    { label: "Maior duração", value: longestCourse ? `${longestCourse} semestres` : "-" },
-                ].map((metric) => (
-                    <Col md={4} key={metric.label}>
-                        <Card className="border-0 shadow-sm h-100 metric-card">
-                            <Card.Body>
-                                <p className="text-secondary mb-1">{metric.label}</p>
-                                <h3 className="mb-0">{metric.value}</h3>
-                            </Card.Body>
-                        </Card>
-                    </Col>
-                ))}
-            </Row>
-
-            <Card className="border-0 shadow-sm list-card">
-                <Card.Body>
-                    <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-                        <h5 className="mb-0">Catálogo de cursos</h5>
-                        {isLoading ? (
-                            <div className="d-flex align-items-center gap-2 text-secondary">
-                                <Spinner animation="border" size="sm" />
-                                Carregando
-                            </div>
-                        ) : (
-                            <Button variant="outline-primary" size="sm" onClick={reload}>
-                                Atualizar lista
-                            </Button>
-                        )}
+            <section className="data-card">
+                <div className="data-card-header">
+                    <div>
+                        <h2 className="data-card-title">Catálogo de cursos</h2>
+                        <span className="data-card-subtitle">Servido pela students-api na porta 8081</span>
                     </div>
-                    {error ? (
-                        <div className="alert alert-danger mb-0" role="alert">
-                            {error}
-                        </div>
+                    {isLoading ? (
+                        <Spinner animation="border" size="sm" />
                     ) : (
-                        <Table responsive hover className="align-middle mb-0 list-table">
-                            <thead>
-                                <tr>
-                                    <th>Curso</th>
-                                    <th>Código</th>
-                                    <th>Nível</th>
-                                    <th>Duração</th>
-                                    <th>Departamento</th>
-                                    <th>Alunos ativos</th>
-                                    <th className="text-end">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {courses.map((course) => (
-                                    <tr key={course.id}>
-                                        <td>{course.name}</td>
-                                        <td>{course.code}</td>
-                                        <td>{DEGREE_LEVEL_LABELS[course.degreeLevel]}</td>
-                                        <td>{course.durationSemesters} semestres</td>
-                                        <td>{course.department ?? "-"}</td>
-                                        <td>
-                                            <Badge bg={course.activeStudents > 0 ? "primary" : "secondary"}>
-                                                {course.activeStudents}
-                                            </Badge>
-                                        </td>
-                                        <td className="text-end">
+                        <Button variant="outline-primary" size="sm" onClick={load}>
+                            <i className="bi bi-arrow-clockwise me-1" />
+                            Atualizar
+                        </Button>
+                    )}
+                </div>
+
+                {error ? (
+                    <div className="data-card-body">
+                        <div className="alert alert-danger mb-0">{error}</div>
+                    </div>
+                ) : (
+                    <Table responsive className="data-table">
+                        <thead>
+                            <tr>
+                                <th>Curso</th>
+                                <th>Nível</th>
+                                <th>Duração</th>
+                                <th>Departamento</th>
+                                <th className="text-center">Alunos ativos</th>
+                                <th className="text-end">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {courses.map((course) => (
+                                <tr key={course.id}>
+                                    <td>
+                                        <span className="cell-main">{course.name}</span>
+                                        <span className="cell-sub">{course.code}</span>
+                                    </td>
+                                    <td>{DEGREE_LEVEL_LABELS[course.degreeLevel]}</td>
+                                    <td>{course.durationSemesters} semestres</td>
+                                    <td>{course.department ?? "-"}</td>
+                                    <td className="text-center">
+                                        <Badge bg={course.activeStudents > 0 ? "primary" : "secondary"}>
+                                            {course.activeStudents}
+                                        </Badge>
+                                    </td>
+                                    <td className="text-end">
+                                        <div className="row-actions">
                                             <Button
                                                 variant="outline-secondary"
                                                 size="sm"
-                                                className="me-2"
+                                                className="icon-btn"
+                                                title="Editar"
                                                 onClick={() => handleEditCourse(course)}
                                             >
-                                                Editar
+                                                <i className="bi bi-pencil" />
                                             </Button>
                                             <Button
                                                 variant="outline-danger"
                                                 size="sm"
+                                                className="icon-btn"
+                                                title="Excluir"
                                                 onClick={() => handleDeleteCourse(course)}
                                             >
-                                                Excluir
+                                                <i className="bi bi-trash" />
                                             </Button>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {!isLoading && courses.length === 0 && (
-                                    <tr>
-                                        <td colSpan={7} className="text-center text-secondary py-4">
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                            {!isLoading && courses.length === 0 && (
+                                <tr>
+                                    <td colSpan={6}>
+                                        <div className="empty-state">
+                                            <i className="bi bi-mortarboard" />
                                             Nenhum curso cadastrado ainda.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </Table>
-                    )}
-                </Card.Body>
-            </Card>
-        </Container>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </Table>
+                )}
+            </section>
+        </>
     )
 }

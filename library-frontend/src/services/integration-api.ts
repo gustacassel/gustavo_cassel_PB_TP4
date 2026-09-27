@@ -1,16 +1,28 @@
 import { apiClient } from "./api-client";
 
-/**
- * Endpoint da library-api que responde consultando o students-api via Feign:
- * "reachable: true" prova que os dois serviços se falam, não apenas que o
- * front-end alcança cada um.
- */
-export interface StudentsIntegrationHealth {
-    service: string
-    reachable: boolean
-    studentCount: number
+// copia local dos alunos na library-api, alimentada pelos eventos de students.events
+export interface ReplicatedStudent {
+    id: number
+    name: string
+    email: string | null
+    enrollmentNumber: string | null
+    status: string
+    courseId: number | null
+    courseName: string | null
+    version: number
+    lastEventAt: string
 }
 
-export async function getStudentsIntegrationHealth(): Promise<StudentsIntegrationHealth> {
-    return apiClient<StudentsIntegrationHealth>("/api/integration/students/health")
+export interface StudentReplicaHealth {
+    source: string
+    studentCount: number
+    lastEventAt: string | null
+}
+
+export async function getReplicatedStudents(): Promise<ReplicatedStudent[]> {
+    return apiClient<ReplicatedStudent[]>("/api/integration/students")
+}
+
+export async function getStudentReplicaHealth(): Promise<StudentReplicaHealth> {
+    return apiClient<StudentReplicaHealth>("/api/integration/students/health")
 }

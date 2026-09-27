@@ -28,6 +28,7 @@ export interface Student {
     status: StudentStatus
     currentSemester: number | null
     course: Course | null
+    activeLoans: number | null
 }
 
 export interface StudentInput {
